@@ -1,5 +1,6 @@
 package com.angel.citas.enums;
 
+import com.angel.commons.enums.DisponibilidadMedico;
 import com.angel.commons.exceptions.RecursoNoEncontradoException;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -12,32 +13,31 @@ import java.util.Set;
 @Getter
 public enum EstadoCita {
 
-    PENDIENTE(1L, "Pendiente de confirmar",true,true) {
+    PENDIENTE(1L, "PENDIENTE", true, true, DisponibilidadMedico.NO_DISPONIBLE){
         @Override
         public Set<EstadoCita> puedeCambiar() {
             return EnumSet.of(CONFIRMADA,CANCELADA);
         }
     },
-    CONFIRMADA(2L, "Confirmada por el paciente",true,false) {
+    CONFIRMADA(2L, "CONFIRMADA", true, false, DisponibilidadMedico.NO_DISPONIBLE) {
         @Override
         public Set<EstadoCita> puedeCambiar() {
             return EnumSet.of(EN_CURSO,CANCELADA);
         }
     },
-    EN_CURSO(3L, "Paciente llego a su cita",true,false) {
+    EN_CURSO(3L, "EN_CURSO", false, false, DisponibilidadMedico.EN_CONSULTA) {
         @Override
         public Set<EstadoCita> puedeCambiar() {
             return EnumSet.of(FINALIZADA);
         }
     },
-    FINALIZADA(4L,"Cita finalizada",false, true) {
+    FINALIZADA(4L, "FINALIZADA", false, true, DisponibilidadMedico.DISPONIBLE) {
         @Override
         public Set<EstadoCita> puedeCambiar() {
             return Set.of();
         }
     },
-    CANCELADA(5L, "Citas cancelada",false,true) {
-        @Override
+    CANCELADA(5L, "CANCELADA", false, true, DisponibilidadMedico.DISPONIBLE){        @Override
         public Set<EstadoCita> puedeCambiar() {
             return Set.of();
         }
@@ -50,6 +50,8 @@ public enum EstadoCita {
     private final boolean actualizable;
 
     private final boolean eliminable;
+
+    private final DisponibilidadMedico disponibilidadMedicoResultante;
 
     public abstract Set<EstadoCita> puedeCambiar();
 

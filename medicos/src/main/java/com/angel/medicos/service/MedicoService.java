@@ -11,4 +11,7 @@ public interface MedicoService extends CrudService<MedicoRequest, MedicoResponse
 
     void actualizarDisponibilidadMedico(Long idMedico, Long idDisponibilidad);
 
+
+
+
 }

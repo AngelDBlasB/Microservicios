@@ -55,7 +55,7 @@ public class Paciente {
     @Column(name = "TELEFONO", nullable = false, length = 10)
     private String telefono;
 
-    @Column(name = "DIRECCION", nullable = false, length = 10)
+    @Column(name = "DIRECCION", nullable = false, length = 150)
     private String direccion;
 
     @Enumerated(EnumType.STRING)
@@ -111,7 +111,7 @@ public class Paciente {
 
     private void validarNoEliminado() {
         if (this.estadoRegistro == EstadoRegistro.ELIMINADO)
-            throw new IllegalStateException("El medico ya está eleiminado");
+            throw new IllegalStateException("El medico ya está eliminado");
     }
 
     /*public boolean cambioEnDatos(String nombre, String apellidoPaterno, String apellidoMaterno,

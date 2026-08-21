@@ -1,6 +1,6 @@
 package com.angel.pacientes.service;
 
-import com.angel.commons.dto.medicos.MedicoRequest;
+import com.angel.commons.client.CitasClient;
 import com.angel.commons.dto.pacientes.PacienteRequest;
 import com.angel.commons.dto.pacientes.PacienteResponse;
 import com.angel.commons.enums.EstadoRegistro;
@@ -23,6 +23,8 @@ public class PacienteServiceImpl implements PacienteService {
 
     private final PacienteRepository pacienteRepository;
     private final PacienteMapper pacienteMapper;
+
+    private final CitasClient citasClient;
 
     @Override
     public List<PacienteResponse> listar() {
@@ -70,6 +72,8 @@ public class PacienteServiceImpl implements PacienteService {
         Paciente paciente = obtenerPacienteActivoOExcepcion(id);
         log.info("Actualizando paciente con id: {}", id);
 
+        validarSinCitasConfirmadasOEnCurso(id);
+
         validarCambiosUnicos(request,id);
 
         paciente.actualizar(
@@ -95,6 +99,8 @@ public class PacienteServiceImpl implements PacienteService {
         log.info("Eliminando paciente con ID: {}", id);
 
         Paciente paciente = obtenerPacienteActivoOExcepcion(id);
+
+        validarSinCitasConfirmadasOEnCurso(id);
 
         paciente.eliminar();
 
@@ -138,5 +144,15 @@ public class PacienteServiceImpl implements PacienteService {
         if (pacienteRepository.existsByTelefonoAndEstadoRegistroAndIdNot(
                 request.telefono().trim(), EstadoRegistro.ACTIVO, id))
             throw new IllegalArgumentException("Ya existe un paciente activo registrado con el telefono: " + request.telefono());
+    }
+
+    private void validarSinCitasConfirmadasOEnCurso(Long idPaciente) {
+        Boolean tieneCitas = citasClient.pacientTieneCitasConfirmadasOEnCurso(idPaciente);
+
+        if (Boolean.TRUE.equals(tieneCitas)) {
+            throw new IllegalStateException(
+                    String.format("El paciente con ID %d tiene citas en estado CONFIRMADA o EN_CURSO y no se puede actualizar ni eliminar.", idPaciente)
+            );
+        }
     }
 }
