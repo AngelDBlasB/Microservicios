@@ -13,31 +13,31 @@ import java.util.Set;
 @Getter
 public enum EstadoCita {
 
-    PENDIENTE(1L, "PENDIENTE", true, true, DisponibilidadMedico.NO_DISPONIBLE){
+    PENDIENTE(1L, "PENDIENTE", true, true){
         @Override
         public Set<EstadoCita> puedeCambiar() {
             return EnumSet.of(CONFIRMADA,CANCELADA);
         }
     },
-    CONFIRMADA(2L, "CONFIRMADA", true, false, DisponibilidadMedico.NO_DISPONIBLE) {
+    CONFIRMADA(2L, "CONFIRMADA", true, false) {
         @Override
         public Set<EstadoCita> puedeCambiar() {
             return EnumSet.of(EN_CURSO,CANCELADA);
         }
     },
-    EN_CURSO(3L, "EN_CURSO", false, false, DisponibilidadMedico.EN_CONSULTA) {
+    EN_CURSO(3L, "EN_CURSO", false, false) {
         @Override
         public Set<EstadoCita> puedeCambiar() {
             return EnumSet.of(FINALIZADA);
         }
     },
-    FINALIZADA(4L, "FINALIZADA", false, true, DisponibilidadMedico.DISPONIBLE) {
+    FINALIZADA(4L, "FINALIZADA", false, true) {
         @Override
         public Set<EstadoCita> puedeCambiar() {
             return Set.of();
         }
     },
-    CANCELADA(5L, "CANCELADA", false, true, DisponibilidadMedico.DISPONIBLE){        @Override
+    CANCELADA(5L, "CANCELADA", false, true){        @Override
         public Set<EstadoCita> puedeCambiar() {
             return Set.of();
         }
@@ -50,8 +50,6 @@ public enum EstadoCita {
     private final boolean actualizable;
 
     private final boolean eliminable;
-
-    private final DisponibilidadMedico disponibilidadMedicoResultante;
 
     public abstract Set<EstadoCita> puedeCambiar();
 
