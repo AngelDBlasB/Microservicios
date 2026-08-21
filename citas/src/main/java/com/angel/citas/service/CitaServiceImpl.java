@@ -10,6 +10,7 @@ import com.angel.commons.client.MedicoClient;
 import com.angel.commons.client.PacienteClient;
 import com.angel.commons.dto.medicos.MedicoResponse;
 import com.angel.commons.dto.pacientes.PacienteResponse;
+import com.angel.commons.enums.DisponibilidadMedico;
 import com.angel.commons.enums.EstadoRegistro;
 import com.angel.commons.exceptions.RecursoNoEncontradoException;
 import lombok.AllArgsConstructor;
@@ -18,6 +19,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @Transactional
@@ -65,11 +67,21 @@ public class CitaServiceImpl implements CitaService {
         log.info("Registrando nueva cita");
 
         MedicoResponse medico = obtenerMedicoActivo(request.idMedico());
+
+        validarMedicoSinCitasActivas(request.idMedico());
+        validarDisponibilidadMedico(request.idMedico());
+
         PacienteResponse paciente = obtenerPacienteActivo(request.idPaciente());
+        validarPacienteSinCitasActivas(request.idPaciente());
 
         Cita cita = citaMapper.requestAEntidad(request);
 
         citaRepository.save(cita);
+
+        medicoClient.actualizarDisponibilidadMedico(
+                medico.id(),
+                DisponibilidadMedico.NO_DISPONIBLE.getCodigo()
+        );
 
         log.info("Cita registrada exitosamente");
 
@@ -84,9 +96,18 @@ public class CitaServiceImpl implements CitaService {
     public CitaResponse actualizar(CitaRequest request, Long id) {
 
         Cita cita = obtenerCitaOException(id);
+        Long idMedicoAnterior = cita.getIdMedico();
 
         MedicoResponse medico = obtenerMedicoActivo(request.idMedico());
+        validarMedicoSinOtrasCitasActivas(request.idMedico(),id);
         PacienteResponse paciente = obtenerPacienteActivo(request.idPaciente());
+        validarPacienteSinOtrasCitasActivas(request.idPaciente(),id);
+
+        boolean hayCambioDeMedico = !Objects.equals(idMedicoAnterior, request.idMedico());
+
+        if (hayCambioDeMedico) {
+            validarDisponibilidadMedico(medico.id());
+        }
 
         log.info("Actualizando cita con id {}", id);
 
@@ -96,6 +117,17 @@ public class CitaServiceImpl implements CitaService {
                 request.fechaCita(),
                 request.sintomas()
         );
+
+        if (hayCambioDeMedico) {
+
+            liberarMedico(idMedicoAnterior, id);
+
+            medicoClient.actualizarDisponibilidadMedico(
+                    request.idMedico(),
+                    DisponibilidadMedico.NO_DISPONIBLE.getCodigo()
+            );
+        }
+
 
         log.info("Cita actualizada con id: {}", id);
 
@@ -111,10 +143,22 @@ public class CitaServiceImpl implements CitaService {
     public void actualizarEstadoCita(Long idCita, Long idEstadoCita) {
 
         Cita cita = obtenerCitaOException(idCita);
+        EstadoCita nuevoEstado = EstadoCita.obtenerEstadoCitaPorCodigo(idEstadoCita);
 
         log.info("Actualizando cita con id {}", idCita);
 
-        cita.actualizarEstadoCita(EstadoCita.obtenerEstadoCitaPorCodigo(idEstadoCita));
+        cita.actualizarEstadoCita(nuevoEstado);
+
+        if (nuevoEstado == EstadoCita.FINALIZADA || nuevoEstado == EstadoCita.CANCELADA) {
+
+            liberarMedico(cita.getIdMedico(), idCita);
+
+        } else {
+            medicoClient.actualizarDisponibilidadMedico(
+                    cita.getIdMedico(),
+                    nuevoEstado.getDisponibilidadMedicoResultante().getCodigo()
+            );
+        }
 
         log.info("Estado de la cita {} actualizando correctamente", idCita);
     }
@@ -128,8 +172,40 @@ public class CitaServiceImpl implements CitaService {
 
         cita.eliminar();
 
+        liberarMedico(cita.getIdMedico(), cita.getId());
+
         log.info("Cita con id {} ha sido marcada como eliminada", id);
 
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean pacienteTieneCitasConfirmadasOEnCurso(Long idPaciente) {
+        List<EstadoCita> estadosRestrictivos = List.of(
+                EstadoCita.CONFIRMADA,
+                EstadoCita.EN_CURSO
+        );
+
+        return citaRepository.existsByIdPacienteAndEstadoCitaInAndEstadoRegistro(
+                idPaciente,
+                estadosRestrictivos,
+                EstadoRegistro.ACTIVO
+        );
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean medicoTieneCitasConfirmadasOEnCurso(Long idMedico) {
+        List<EstadoCita> estadosRestrictivos = List.of(
+                EstadoCita.CONFIRMADA,
+                EstadoCita.EN_CURSO
+        );
+
+        return citaRepository.existsByIdMedicoAndEstadoCitaInAndEstadoRegistro(
+                idMedico,
+                estadosRestrictivos,
+                EstadoRegistro.ACTIVO
+        );
     }
 
     private Cita obtenerCitaOException(Long id){
@@ -167,6 +243,105 @@ public class CitaServiceImpl implements CitaService {
         log.info("Buscando paciente sin estado con id {} en el servicio remoto...",id);
 
         return pacienteClient.obtenerPacientePorIdSinEstado(id);
+    }
+
+    private void validarPacienteSinCitasActivas(Long idPaciente) {
+        List<EstadoCita> estadosActivos = List.of(
+                EstadoCita.PENDIENTE,
+                EstadoCita.CONFIRMADA,
+                EstadoCita.EN_CURSO
+        );
+
+        if (citaRepository.existsByIdPacienteAndEstadoCitaInAndEstadoRegistro(
+                idPaciente, estadosActivos, EstadoRegistro.ACTIVO)) {
+            throw new IllegalStateException(
+                    "El paciente ya tiene una cita activa en estado PENDIENTE, CONFIRMADA o EN_CURSO."
+            );
+        }
+    }
+
+    private void validarPacienteSinOtrasCitasActivas(Long idPaciente, Long idCita) {
+        List<EstadoCita> estadosActivos = List.of(
+                EstadoCita.PENDIENTE,
+                EstadoCita.CONFIRMADA,
+                EstadoCita.EN_CURSO
+        );
+
+        if (citaRepository.existsByIdPacienteAndEstadoCitaInAndEstadoRegistroAndIdNot(
+                idPaciente, estadosActivos, EstadoRegistro.ACTIVO, idCita)) {
+            throw new IllegalStateException(
+                    "El paciente ya tiene una cita activa en estado PENDIENTE, CONFIRMADA o EN_CURSO."
+            );
+        }
+    }
+
+    private void validarMedicoSinCitasActivas(Long idMedico) {
+        List<EstadoCita> estadosActivos = List.of(
+                EstadoCita.PENDIENTE,
+                EstadoCita.CONFIRMADA,
+                EstadoCita.EN_CURSO
+        );
+
+        if (citaRepository.existsByIdMedicoAndEstadoCitaInAndEstadoRegistro(
+                idMedico, estadosActivos, EstadoRegistro.ACTIVO)) {
+            throw new IllegalStateException(
+                    "El medico ya tiene una cita activa en estado PENDIENTE, CONFIRMADA o EN_CURSO."
+            );
+        }
+    }
+
+    private void validarMedicoSinOtrasCitasActivas(Long idMedico, Long idCita) {
+        List<EstadoCita> estadosActivos = List.of(
+                EstadoCita.PENDIENTE,
+                EstadoCita.CONFIRMADA,
+                EstadoCita.EN_CURSO
+        );
+
+        if (citaRepository.existsByIdMedicoAndEstadoCitaInAndEstadoRegistroAndIdNot(
+                idMedico, estadosActivos, EstadoRegistro.ACTIVO, idCita)) {
+            throw new IllegalStateException(
+                    "El medico ya tiene una cita activa en estado PENDIENTE, CONFIRMADA o EN_CURSO."
+            );
+        }
+    }
+
+
+    private void validarDisponibilidadMedico(Long idMedico) {
+
+        MedicoResponse medico = obtenerMedicoActivo(idMedico);
+
+        if (!DisponibilidadMedico.DISPONIBLE.getDescripcion().equalsIgnoreCase(medico.disponibilidad())) {
+            throw new IllegalStateException(
+                    String.format("El médico con ID %d no está disponible para asignar cita. Estado actual: %s",
+                            idMedico,
+                            medico.disponibilidad())
+            );
+        }
+    }
+
+    private void liberarMedico(Long idMedico, Long idCitaActual) {
+        List<EstadoCita> estadosActivos = List.of(
+                EstadoCita.PENDIENTE,
+                EstadoCita.CONFIRMADA,
+                EstadoCita.EN_CURSO
+        );
+
+        boolean tieneOtrasCitasActivas = citaRepository
+                .existsByIdMedicoAndEstadoCitaInAndEstadoRegistroAndIdNot(
+                        idMedico,
+                        estadosActivos,
+                        EstadoRegistro.ACTIVO,
+                        idCitaActual
+                );
+
+        if (!tieneOtrasCitasActivas) {
+            medicoClient.actualizarDisponibilidadMedico(
+                    idMedico,
+                    DisponibilidadMedico.DISPONIBLE.getCodigo()
+            );
+        } else {
+            log.info("El médico ID {} no se libera a DISPONIBLE porque aún tiene citas activas.", idMedico);
+        }
     }
 
 }

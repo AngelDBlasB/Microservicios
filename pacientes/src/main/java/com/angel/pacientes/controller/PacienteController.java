@@ -1,7 +1,6 @@
 package com.angel.pacientes.controller;
 
 import com.angel.commons.controller.CommonController;
-import com.angel.commons.dto.medicos.MedicoResponse;
 import com.angel.commons.dto.pacientes.PacienteRequest;
 import com.angel.commons.dto.pacientes.PacienteResponse;
 import com.angel.pacientes.service.PacienteService;
@@ -21,7 +20,7 @@ public class PacienteController extends CommonController<PacienteRequest, Pacien
     }
 
     @GetMapping("/id-paciente/{id}")
-    public ResponseEntity<PacienteResponse> obtenerMedicoPorIdSinEstado(
+    public ResponseEntity<PacienteResponse> obtenerPacientePorIdSinEstado(
             @PathVariable @Positive(message = "El ID debe ser positivo") Long id
     ){
         return  ResponseEntity.ok(service.obtenerPacientePorIdSinEstado(id));

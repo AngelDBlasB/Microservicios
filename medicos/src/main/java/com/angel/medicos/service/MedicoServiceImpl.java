@@ -1,5 +1,6 @@
 package com.angel.medicos.service;
 
+import com.angel.commons.client.CitasClient;
 import com.angel.commons.dto.medicos.MedicoRequest;
 import com.angel.commons.dto.medicos.MedicoResponse;
 import com.angel.commons.enums.DisponibilidadMedico;
@@ -24,6 +25,8 @@ public class MedicoServiceImpl implements MedicoService {
 
     private final MedicoRepository medicoRepository;
     private final MedicoMapper medicoMapper;
+
+    private final CitasClient citasClient;
 
 
     @Override
@@ -77,6 +80,8 @@ public class MedicoServiceImpl implements MedicoService {
 
         log.info("Actualizando medico con id: {}", id);
 
+        validarSinCitasConfirmadasOEnCurso(id);
+
         validarCambiosUnicos(request,id);
 
         medico.actualizar(
@@ -101,6 +106,8 @@ public class MedicoServiceImpl implements MedicoService {
 
         log.info("Eliminando medico con id: {}", id);
 
+        validarSinCitasConfirmadasOEnCurso(id);
+
         medico.eliminar();
 
         log.info("Medico eliminado correctamente");
@@ -117,12 +124,10 @@ public class MedicoServiceImpl implements MedicoService {
         DisponibilidadMedico nuevaDisponibilidad = DisponibilidadMedico.
                 obtenerDisponibilidadPorCodigo(idDisponibilidad);
 
-        DisponibilidadMedico disponibilidadAnterior = medico.getDisponibilidad();
-
         medico.actualizarDisponibilidad(nuevaDisponibilidad);
 
-        log.info("Disponibilidad del medico con id {} cambio de {} a {}",
-                idMedico,disponibilidadAnterior, nuevaDisponibilidad);
+        log.info("Disponibilidad del medico con id {} cambio a {}",
+                idMedico, nuevaDisponibilidad);
 
     }
 
@@ -131,7 +136,7 @@ public class MedicoServiceImpl implements MedicoService {
 
         return medicoRepository.findByIdAndEstadoRegistro(id, EstadoRegistro.ACTIVO)
                 .orElseThrow(()-> new RecursoNoEncontradoException(
-                        "Medico activo no encontrado con id {}" + id
+                        "Medico activo no encontrado con id: " + id
                 ));
     }
 
@@ -177,6 +182,16 @@ public class MedicoServiceImpl implements MedicoService {
                 request.cedulaProfesional().trim(), EstadoRegistro.ACTIVO,id))
             throw new IllegalArgumentException("Ya existe un medico activo registrado con la cedula profesional: "
                     + request.cedulaProfesional());
+    }
+
+    private void validarSinCitasConfirmadasOEnCurso(Long idMedico) {
+        Boolean tieneCitas = citasClient.medicoTieneCitasConfirmadasOEnCurso(idMedico);
+
+        if (Boolean.TRUE.equals(tieneCitas)) {
+            throw new IllegalStateException(
+                    String.format("El medico con ID %d tiene citas en estado CONFIRMADA o EN_CURSO y no se puede actualizar ni eliminar.", idMedico)
+            );
+        }
     }
 
 

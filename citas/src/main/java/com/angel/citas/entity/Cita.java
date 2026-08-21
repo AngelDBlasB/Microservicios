@@ -113,14 +113,16 @@ public class Cita {
 
     public void actualizarEstadoCita(EstadoCita nuevoEstado) {
 
-        validarActualizacionPermitida();
+        validarNoEliminada();
 
         if (nuevoEstado == null)
             throw new IllegalArgumentException("El nuevo estado de la cita es requerido");
+
         if (!estadoCita.puedeCambiarA(nuevoEstado))
             throw new IllegalStateException("La cita con estado "
                     + estadoCita + "solo puede cambiar a: "
                     +estadoCita.puedeCambiar());
+
         this.estadoCita = nuevoEstado;
     }
 
